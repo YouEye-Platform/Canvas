@@ -1,0 +1,180 @@
+apiVersion: v1
+kind: app
+integration: native
+surfaceSchemaVersion: 1
+
+metadata:
+  id: "myapp"
+  name: "My App"
+  description: "A YouEye native app built with Canvas"
+  icon: "star"
+  category: "productivity"
+  defaultSubdomain: "myapp"
+
+# Network mode for this app's container:
+#   "isolated" (default) — app can only reach youeye-ui and approved bridges via ACL.
+#                           No outbound internet access unless explicitly granted below.
+#   "internet"           — app has unrestricted outbound internet access (rare, requires admin approval).
+network: isolated
+
+# Set to "shared" if your app needs a PostgreSQL database, or "none" if not
+database:
+  mode: none
+
+containers:
+  - name: main
+    type: lxd
+    image: debian/12
+    port: 3000
+    primary: true
+    source:
+      # Replace with the public owner/repository identity for your fork.
+      repo: YOUR_PUBLIC_ORG/YOUR_APP_REPOSITORY
+      nodeVersion: "22.x"
+      appDir: app
+    healthCheck:
+      type: http
+      path: /api/health
+      timeout: 120000
+
+secrets:
+  - name: jwt_secret
+    file: .jwt_secret
+    generator: secretKey
+    length: 64
+
+sso:
+  type: oauth2
+  callback_path: /api/auth/callback
+  setup:
+    method: env
+
+# Declare what capabilities this app provides to other apps (optional)
+# Other apps can discover providers by type via the platform API
+provides: []
+#  - type: search-engine
+#    description: "Full-text search engine"
+#    port: 8080
+
+# Declare which other apps this app wants to connect to (optional)
+# The admin approves connections from the Network settings tab.
+# Use appId for specific apps, or type for any app providing that capability.
+wants: []
+#  - appId: some-backend
+#    name: Some Backend
+#    description: "What this backend does"
+#    defaultPort: 8080
+#  - type: search-engine
+#    name: Search Engine
+#    description: "Any compatible search engine backend"
+#    defaultPort: 8080
+
+# Declare which external hosts this app needs internet access to (optional)
+# Empty = no internet needed. The admin grants access from the Permissions page
+internet:
+  hosts: []
+
+# App-rendered surfaces use the unified youeye:ready / youeye:resize protocol.
+surfaces:
+  - id: sample-widget
+    kind: widget
+    placement: dashboard
+    name: Sample Widget
+    description: Starter dashboard widget
+    embedPath: /embed/widget/sample-widget
+    permissions: []
+    defaultSize:
+      width: 24
+      height: 16
+    minSize:
+      width: 16
+      height: 10
+    maxSize:
+      width: 40
+      height: 32
+  - id: sample-timeline-card
+    kind: timeline-card
+    placement: timeline
+    name: Sample Timeline Card
+    description: Starter timeline entry renderer
+    embedPath: /embed/timeline/sample
+    permissions: []
+    defaultSize:
+      width: 48
+      height: 18
+    minSize:
+      width: 32
+      height: 12
+    maxSize:
+      width: 64
+      height: 28
+    triggers:
+      - myapp.sample.created
+  - id: sample-info-card
+    kind: info-card
+    placement: app-detail
+    name: Sample Info Card
+    description: Starter URL/context card renderer
+    embedPath: /embed/card/sample
+    permissions: []
+    defaultSize:
+      width: 48
+      height: 16
+    minSize:
+      width: 32
+      height: 12
+    maxSize:
+      width: 64
+      height: 28
+    triggers:
+      - "https://example.com/*"
+      - "https://*.example.com/*"
+  - id: sample-notification
+    kind: notification
+    placement: notification-center
+    name: Sample Notification
+    description: Starter notification renderer
+    embedPath: /embed/notification/default
+    permissions: []
+    defaultSize:
+      width: 40
+      height: 10
+    minSize:
+      width: 32
+      height: 8
+    maxSize:
+      width: 48
+      height: 18
+  - id: app-settings
+    kind: settings-panel
+    placement: app-settings
+    name: App Settings
+    description: Starter settings panel
+    embedPath: /embed/settings
+    permissions: []
+
+env_mapping:
+  JWT_SECRET: "${secrets.jwt_secret}"
+  IDENTITY_URL: "${identity.externalUrl}"
+  IDENTITY_INTERNAL_URL: "${identity.internalUrl}"
+  IDENTITY_CLIENT_ID: "${sso.client_id}"
+  IDENTITY_CLIENT_SECRET: "${sso.client_secret}"
+  APP_URL: "${app.url}"
+  APP_EXTERNAL_URL: "${app.url}"
+  NEXT_PUBLIC_APP_URL: "${app.url}"
+  YOUEYE_GATEWAY: "${integration.gateway_url}"
+  YOUEYE_APP_TOKEN: "${integration.app_token}"
+  YOUEYE_API_URL: "${integration.api_url}"
+  YOUEYE_UI_URL: "${ui.external_url}"
+  YOUEYE_APP_ID: "${app.id}"
+  NODE_ENV: production
+  PORT: "3000"
+  HOSTNAME: "0.0.0.0"
+
+uninstall:
+  dropSharedDatabase: false
+
+update:
+  strategy: replace
+  preserveData: true
+  preserveSecrets: true

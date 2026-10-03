@@ -11,10 +11,11 @@ import { validateSourceTemplate } from "../scripts/validate-source.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const version = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;
-const expectedTag = `v${version}`;
+const tagPrefix = version.split(".").length === 6 ? "dev-v" : "v";
+const expectedTag = `${tagPrefix}${version}`;
 const parts = version.split(".");
 parts[parts.length - 1] = String(Number(parts.at(-1)) + 1);
-const wrongTag = `v${parts.join(".")}`;
+const wrongTag = `${tagPrefix}${parts.join(".")}`;
 
 function fixture(t) {
   const target = mkdtempSync(join(tmpdir(), "canvas-source-release-"));
@@ -42,7 +43,7 @@ function rejects(rootPath, options, pattern) {
 test("accepts the repository as a deterministic source template", () => {
   const result = validateSourceTemplate({ root, expectedTag });
   assert.equal(result.derivedTag, expectedTag);
-  assert.match(result.version, /^\d+\.\d+\.\d+(?:\.\d+){0,2}$/);
+  assert.match(result.version, /^\d+\.\d+\.\d+(?:\.\d+){0,3}$/);
 });
 
 test("derives one exact release tag from package.json.version", (t) => {
@@ -125,7 +126,7 @@ test("accepts five-position source releases and preserves exact tag binding", (t
   writeFileSync(path, JSON.stringify(pkg));
   assert.equal(validateSourceTemplate({ root: target, expectedTag: "v0.3.1.0.1" }).version, pkg.version);
   rejects(target, { expectedTag: "v0.3.1.0.2" }, /does not match/);
-  for (const invalid of ["0.3.1.0.1.2", "0.3.1.00.1", "0.3.1.0.1-beta"]) {
+  for (const invalid of ["0.3.1.0.1.2.3", "0.3.1.00.1", "0.3.1.0.1-beta"]) {
     pkg.version = invalid; writeFileSync(path, JSON.stringify(pkg));
     rejects(target, {}, /package\.json\.version/);
   }
@@ -184,4 +185,22 @@ test("beta source release requires exact four-position tag and version", (t) => 
   pkg.version = "0.4.1";
   writeFileSync(path, JSON.stringify(pkg));
   rejects(target, { expectedTag: "beta-v0.4.1" }, /four-component/);
+});
+
+
+test("development source versions preserve channel depth and exact tag binding", (t) => {
+  const target = fixture(t);
+  const path = join(target, "package.json");
+  const pkg = JSON.parse(readFileSync(path, "utf8"));
+  pkg.version = "0.5.13.0.0.1";
+  writeFileSync(path, JSON.stringify(pkg));
+  assert.equal(validateSourceTemplate({ root: target }).derivedTag, "dev-v0.5.13.0.0.1");
+  assert.equal(validateSourceTemplate({ root: target, expectedTag: "dev-v0.5.13.0.0.1" }).version, pkg.version);
+  rejects(target, { expectedTag: "dev-v0.5.13.0.0.2" }, /does not match/);
+  rejects(target, { expectedTag: "v0.5.13.0.0.1" }, /require a dev-v tag/);
+  rejects(target, { expectedTag: "beta-v0.5.13.0.0.1" }, /four-component/);
+  pkg.version = "0.5.13.0.1";
+  writeFileSync(path, JSON.stringify(pkg));
+  rejects(target, { expectedTag: "dev-v0.5.13.0.1" }, /six-component/);
+  assert.equal(validateSourceTemplate({ root: target, expectedTag: "v0.5.13.0.1" }).version, pkg.version);
 });

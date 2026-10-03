@@ -1,6 +1,6 @@
 {
   "name": "youeye-canvas",
-  "version": "0.5.13",
+  "version": "0.5.14",
   "private": true,
   "description": "YouEye Canvas — fork this repo to create a new YouEye native app",
   "scripts": {

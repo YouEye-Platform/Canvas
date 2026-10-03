@@ -11,8 +11,8 @@ import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const DEFAULT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const VERSION_PATTERN = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,2}$/;
-const TAG_PATTERN = /^(?:beta-)?v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,2}$/;
+const VERSION_PATTERN = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,3}$/;
+const TAG_PATTERN = /^(?:(?:beta|dev)-)?v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,3}$/;
 const REQUIRED_FILES = ["README.md", "CONTRIBUTING.md", "package.json", "youeye-app.yaml"];
 const FORBIDDEN_PUBLIC_FILES = ["AGENTS.md", "CLAUDE.md", "scripts/postbuild.mjs"];
 const FORBIDDEN_TRACKED_PREFIXES = [".next/", "dist/", "out/"];
@@ -75,7 +75,7 @@ function validatePackage(root, expectedTag) {
   const pkg = readJson(root, "package.json");
   if (pkg.private !== true) fail("package.json must remain private; Canvas is released as source, not an npm package");
   if (typeof pkg.version !== "string" || !VERSION_PATTERN.test(pkg.version)) {
-    fail("package.json.version must be a numeric 3-, 4-, or 5-component version without a leading v");
+    fail("package.json.version must be a numeric 3- to 6-component version without a leading v");
   }
   if (pkg.scripts?.build !== "next build") {
     fail('package.json scripts.build must be exactly "next build" and must not package standalone output');
@@ -87,11 +87,15 @@ function validatePackage(root, expectedTag) {
     fail("package.json must expose the deterministic validate:release command");
   }
 
+  if (expectedTag !== undefined && !TAG_PATTERN.test(expectedTag)) fail(`release tag ${JSON.stringify(expectedTag)} is malformed`);
+  const depth = pkg.version.split('.').length;
   const beta = expectedTag?.startsWith("beta-v");
-  if (beta && pkg.version.split('.').length !== 4) fail("beta release requires a four-component version");
-  const derivedTag = `${beta ? 'beta-' : ''}v${pkg.version}`;
+  const dev = expectedTag === undefined ? depth === 6 : expectedTag.startsWith("dev-v");
+  if (beta && depth !== 4) fail("beta release requires a four-component version");
+  if (dev && depth !== 6) fail("dev release requires a six-component version");
+  if (depth === 6 && !dev) fail("six-component development versions require a dev-v tag");
+  const derivedTag = `${dev ? 'dev-' : beta ? 'beta-' : ''}v${pkg.version}`;
   if (expectedTag !== undefined) {
-    if (!TAG_PATTERN.test(expectedTag)) fail(`release tag ${JSON.stringify(expectedTag)} is malformed; expected ${derivedTag}`);
     if (expectedTag !== derivedTag) fail(`release tag ${expectedTag} does not match package.json version; expected ${derivedTag}`);
   }
   return { version: pkg.version, derivedTag };

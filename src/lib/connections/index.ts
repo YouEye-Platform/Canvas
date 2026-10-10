@@ -1,3 +1,4 @@
+import { appServiceHeaders } from "../api/service-headers";
 /**
  * Canvas connections — discovery, app proxy, and internet proxy helpers
  *
@@ -47,11 +48,9 @@ export interface ConnectionStatus {
   available: AvailableBackend[];
 }
 
-let _cache: { data: ConnectionStatus; ts: number } | null = null;
+let _cache: { data: ConnectionStatus; ts: number; userId?: string } | null = null;
 const CACHE_TTL = 30_000;
 
-const YOUEYE_APP_ID = process.env.YOUEYE_APP_ID;
-const YOUEYE_APP_TOKEN = process.env.YOUEYE_APP_TOKEN;
 
 /** Resolve the YE-UI API URL from env vars. Prefers YOUEYE_API_URL, falls back to YOUEYE_GATEWAY. */
 function resolveApiUrl(): string {
@@ -78,8 +77,8 @@ function resolveGatewayUrl(): string {
  * Fetch the app's current connections from the YE-UI discovery API.
  * Cached for 30 seconds.
  */
-export async function getConnections(): Promise<ConnectionStatus> {
-  if (_cache && Date.now() - _cache.ts < CACHE_TTL) return _cache.data;
+export async function getConnections(userId?: string): Promise<ConnectionStatus> {
+  if (_cache && _cache.userId === userId && Date.now() - _cache.ts < CACHE_TTL) return _cache.data;
 
   const empty: ConnectionStatus = {
     bridges: [], internet: { granted: false, hosts: [], blanket: false }, available: [],
@@ -90,10 +89,8 @@ export async function getConnections(): Promise<ConnectionStatus> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const res = await fetch(`${apiUrl}/my-connections`, {
-        headers: {
-          "X-YouEye-App": YOUEYE_APP_ID || "",
-          ...(YOUEYE_APP_TOKEN ? { Authorization: `Bearer ${YOUEYE_APP_TOKEN}` } : {}),
-        },
+        headers: appServiceHeaders(undefined, userId),
+        redirect: "error",
         cache: "no-store",
       });
 
@@ -107,7 +104,7 @@ export async function getConnections(): Promise<ConnectionStatus> {
         continue;
       }
 
-      _cache = { data, ts: Date.now() };
+      _cache = { data, ts: Date.now(), userId };
       return data;
     } catch {
       if (attempt === 0) {
@@ -137,28 +134,28 @@ export function internetProxyUrl(targetUrl: string): string {
   return `${resolveGatewayUrl()}/internet?url=${encodeURIComponent(targetUrl)}`;
 }
 
-export function connectionHeaders(extra?: HeadersInit): HeadersInit {
-  const headers = new Headers(extra);
-  if (YOUEYE_APP_ID) headers.set("X-YouEye-App", YOUEYE_APP_ID);
-  if (YOUEYE_APP_TOKEN) headers.set("Authorization", `Bearer ${YOUEYE_APP_TOKEN}`);
-  return headers;
+export function connectionHeaders(extra?: HeadersInit, userId?: string): HeadersInit {
+  return appServiceHeaders(extra, userId);
 }
 
 export async function connectionFetch(
   targetAppId: string,
   path: string = "",
   init: RequestInit = {},
+  userId?: string,
 ): Promise<Response> {
   return fetch(connectionProxyUrl(targetAppId, path), {
     ...init,
-    headers: connectionHeaders(init.headers),
+    headers: connectionHeaders(init.headers, userId),
+    redirect: "error",
   });
 }
 
-export async function internetFetch(targetUrl: string, init: RequestInit = {}): Promise<Response> {
+export async function internetFetch(targetUrl: string, init: RequestInit = {}, userId?: string): Promise<Response> {
   return fetch(internetProxyUrl(targetUrl), {
     ...init,
-    headers: connectionHeaders(init.headers),
+    headers: connectionHeaders(init.headers, userId),
+    redirect: "error",
   });
 }
 

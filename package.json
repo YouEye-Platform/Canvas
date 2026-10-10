@@ -1,8 +1,8 @@
 {
   "name": "youeye-canvas",
-  "version": "0.5.14",
+  "version": "0.5.15",
   "private": true,
-  "description": "YouEye Canvas — fork this repo to create a new YouEye native app",
+  "description": "YouEye Canvas \u2014 fork this repo to create a new YouEye native app",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",

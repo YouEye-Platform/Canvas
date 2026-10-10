@@ -1,3 +1,4 @@
+import { appServiceHeaders } from "./service-headers";
 /**
  * Canvas API client for YouEye platform endpoints
  *
@@ -60,16 +61,11 @@ export interface YouEyeApiClient {
 }
 
 export function createApiClient(appId: string): YouEyeApiClient {
+  const platformAppId = process.env.YOUEYE_APP_ID || appId;
   async function youeyeFetch(path: string, options: RequestInit = {}, userId?: string): Promise<Response> {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      "X-YouEye-App": appId,
-      ...(options.headers as Record<string, string>),
-    };
-    if (userId) headers["X-YouEye-User"] = userId;
-    const appToken = process.env.YOUEYE_APP_TOKEN;
-    if (appToken) headers["Authorization"] = `Bearer ${appToken}`;
-    return fetch(`${getYouEyeApiUrl()}${path}`, { ...options, headers });
+    const headers = appServiceHeaders(options.headers, userId);
+    if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+    return fetch(`${getYouEyeApiUrl()}${path}`, { ...options, headers, redirect: "error" });
   }
 
   return {
@@ -95,7 +91,7 @@ export function createApiClient(appId: string): YouEyeApiClient {
 
     async getUserSettings(userId: string): Promise<Record<string, unknown>> {
       try {
-        const res = await youeyeFetch(`/apps/${appId}/user-settings`, {}, userId);
+        const res = await youeyeFetch(`/apps/${encodeURIComponent(platformAppId)}/user-settings`, {}, userId);
         if (!res.ok) return {};
         const data = await res.json();
         return data.settings ?? {};
@@ -106,7 +102,7 @@ export function createApiClient(appId: string): YouEyeApiClient {
 
     async saveUserSettings(userId: string, settings: Record<string, unknown>): Promise<boolean> {
       try {
-        const res = await youeyeFetch(`/apps/${appId}/user-settings`, { method: "PUT", body: JSON.stringify({ settings }) }, userId);
+        const res = await youeyeFetch(`/apps/${encodeURIComponent(platformAppId)}/user-settings`, { method: "PUT", body: JSON.stringify({ settings }) }, userId);
         return res.ok;
       } catch {
         return false;
@@ -124,7 +120,7 @@ export function createApiClient(appId: string): YouEyeApiClient {
 
     async postTimelineEntry(userId: string, collection: string, data: Record<string, unknown>) {
       try {
-        await youeyeFetch(`/timeline/${collection}`, { method: "POST", body: JSON.stringify(data) }, userId);
+        await youeyeFetch("/timeline", { method: "POST", body: JSON.stringify({ ...data, collection }) }, userId);
       } catch {
         // Non-critical — timeline is best-effort
       }

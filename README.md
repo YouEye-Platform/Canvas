@@ -102,3 +102,59 @@ Validation is local and dependency-free. It checks the source-template identity,
 ## License and trademarks
 
 Source is licensed under the [Business Source License 1.1](LICENSE), with the change date and change license stated there. See [TRADEMARK.md](TRADEMARK.md) for trademark guidance.
+
+## Acting user and household admission
+
+Private routes derive the acting identity from `getSession(appId)`, which checks
+the native cookie and current identity session through the configured client.
+Both middleware and backend checks send the verified JWT `iat` as
+`X-YouEye-Session-Issued-At` to `/identity/session/check`, alongside the
+confidential client credentials and expected subject/session IDs. The provider
+rejects missing or malformed times and sessions issued at or before the
+client/user revocation cutoff. Restoring access requires a fresh authorization;
+it does not revive an old app cookie. Update vendored app auth modules before
+deploying a provider that requires this header. Never derive it from request
+headers or from the current clock.
+Never use a browser-supplied `X-YouEye-User`, `userId` or `user_id` to select
+private rows or nominate the user of a platform service call. Household admission
+and per-user service consent are separate checks; administrative status does not
+grant access to every app.
+
+Apps whose private namespaces use the validated OIDC subject should declare
+`data_ownership: { per_user: identity_uuid }` in their app manifest. Control
+Panel reserves immutable per-user ownership records for the installation;
+the app still enforces private-row access. This declaration cannot nominate an
+owner or claim platform row isolation. A recreated username has a new UUID and
+must never adopt its predecessor's private namespace.
+
+Participating back-channel logout handlers should persist the signed event
+`iat` and reject cookies issued at or before that cutoff. Use the signed time,
+not the delivery time: a delayed event must not invalidate a fresh authorization
+after access is restored. Deduplicate by event identity and reject conflicting
+replays. A later revocation of the same identity session is a separate event.
+Older stored events without a signed cutoff should conservatively deny their
+original session. Session checks remain required for apps without a registered
+back-channel endpoint.
+
+Widget, card and inter-app routes require a native session. Inter-app factories
+receive an explicit app ID and pass `{ userId }` as the second handler argument;
+user fields are removed from request data. A server-to-server caller without a
+validated native session is denied. Header/body identity nomination is not a
+supported delegation protocol. Existing explicitly public shares and public
+content remain distinct from private routes, and external public exposure must
+be chosen by the appliance administrator.
+
+## App service credentials
+
+Platform calls run on the server with the protected `YOUEYE_APP_ID`,
+`YOUEYE_APP_TOKEN` and `YOUEYE_GATEWAY` values injected by the installer.
+The app ID is the exact installed ID; helpers do not invent prefix aliases.
+A missing credential fails with an integration-not-ready error. Use Market's
+administrator credential reconciliation action to repair delivery.
+
+Pass the acting user from a validated server session. Caller-supplied headers
+cannot replace machine identity, select another user, or attach a browser/bridge
+credential. Keep platform helpers in server code and keep runtime credentials
+out of source, browser bundles and logs. Public health/manifests do not need a
+service credential. Rotation and restore reinject a credential and prove it
+before marking integration ready.

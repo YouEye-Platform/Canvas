@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getSession } from "@/lib/auth/session";
 
 import {
   connectionFetch,
@@ -10,11 +11,13 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const url = new URL(request.url);
   const targetAppId = url.searchParams.get("targetAppId");
   const targetPath = url.searchParams.get("path") || "/";
   const externalUrl = url.searchParams.get("url");
-  const connections = await getConnections();
+  const connections = await getConnections(session.userId);
 
   if (targetAppId) {
     const backend = getBackend(connections, targetAppId);
@@ -25,7 +28,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const response = await connectionFetch(targetAppId, targetPath);
+    const response = await connectionFetch(targetAppId, targetPath, {}, session.userId);
     return NextResponse.json({
       ok: response.ok,
       kind: "app-connection",
@@ -36,7 +39,7 @@ export async function GET(request: Request) {
   }
 
   if (externalUrl) {
-    const response = await internetFetch(externalUrl);
+    const response = await internetFetch(externalUrl, {}, session.userId);
     return NextResponse.json({
       ok: response.ok,
       kind: "internet",

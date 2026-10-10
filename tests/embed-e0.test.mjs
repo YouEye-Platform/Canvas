@@ -63,7 +63,7 @@ test('Canvas declares the modern surface contract and no request-bridge API', ()
   assert.doesNotMatch(manifest, /kind: launcher/);
   assert.doesNotMatch(route, /kind: "launcher"/);
   assert.match(route, /surfaceSchemaVersion: 1/);
-  assert.match(connections, /Authorization: `Bearer \$\{YOUEYE_APP_TOKEN\}`/);
+  assert.match(connections, /appServiceHeaders\(extra, userId\)/);
   assert.match(connections, /\/proxy\/\$\{encodeURIComponent\(targetAppId\)\}/);
   assert.match(connections, /internetFetch/);
   assert.match(connections, /\/internet\?url=\$\{encodeURIComponent\(targetUrl\)\}/);

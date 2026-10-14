@@ -82,12 +82,16 @@ That command runs `next build`; it does not package or publish a runtime artifac
 
 ## Validation and release tags
 
-`package.json` is the only Canvas version authority. For version `X`, the only valid source-release tag is `vX`. No manifest version or separate version file is used.
+`package.json` is the only Canvas version authority. New versions use
+`X.Y.Z[-token.N]`, independently of YouEye core. Stable and private-main tags
+use `v<version>`; Beta uses `beta-v<version>` and development uses
+`dev-v<version>`. Private-main versions carry an `alpha.N` suffix. No manifest
+version or separate version file is used.
 
 ```bash
 pnpm test
 pnpm validate:source
-RELEASE_TAG="v$(node -p "require('./package.json').version")" pnpm validate:release
+RELEASE_TAG="<exact destination tag>" pnpm validate:release
 ```
 
 Validation is local and dependency-free. It checks the source-template identity, application-manifest kind, public documentation, forbidden private references, absence of tracked runtime output, and the release tag when release mode is selected. See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete public-release gate.

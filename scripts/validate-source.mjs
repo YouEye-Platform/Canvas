@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isReleaseVersion, RELEASE_VERSION, validateReleaseBranch } from "./release-version.mjs";
 
 const DEFAULT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const VERSION_PATTERN = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,3}$/;
@@ -74,7 +75,7 @@ function readJson(root, path) {
 function validatePackage(root, expectedTag) {
   const pkg = readJson(root, "package.json");
   if (pkg.private !== true) fail("package.json must remain private; Canvas is released as source, not an npm package");
-  if (typeof pkg.version !== "string" || !VERSION_PATTERN.test(pkg.version)) {
+  if (typeof pkg.version !== "string" || !isReleaseVersion(pkg.version) && !VERSION_PATTERN.test(pkg.version)) {
     fail("package.json.version must be a numeric 3- to 6-component version without a leading v");
   }
   if (pkg.scripts?.build !== "next build") {
@@ -87,6 +88,20 @@ function validatePackage(root, expectedTag) {
     fail("package.json must expose the deterministic validate:release command");
   }
 
+  if (isReleaseVersion(pkg.version)) {
+    const token = RELEASE_VERSION.exec(pkg.version)[4] ?? "";
+    const branch = token === "dev" || token === "beta" ? token : "main";
+    let derivedTag = `${branch === "main" ? "" : branch + "-"}v${pkg.version}`;
+    if (token && !["dev", "beta", "alpha"].includes(token) && expectedTag !== undefined) {
+      const suffix = `-v${pkg.version}`;
+      if (!expectedTag.endsWith(suffix)) fail("feature tag does not match exact version");
+      validateReleaseBranch(expectedTag.slice(0, -suffix.length));
+      derivedTag = expectedTag;
+    }
+    if (expectedTag !== undefined && expectedTag !== derivedTag) fail(`release tag must be ${derivedTag}`);
+    return { version: pkg.version, derivedTag };
+  }
+  // Retained numeric-depth candidates remain inspectable under their old contract.
   if (expectedTag !== undefined && !TAG_PATTERN.test(expectedTag)) fail(`release tag ${JSON.stringify(expectedTag)} is malformed`);
   const depth = pkg.version.split('.').length;
   const beta = expectedTag?.startsWith("beta-v");

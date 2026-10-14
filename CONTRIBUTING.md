@@ -20,7 +20,10 @@ Contributions must include only assets, names, and other material the contributo
 
 ## Public-release contract
 
-A Canvas public release is the tracked, editable source template. `package.json.version` is its sole version authority. Numeric versions may have three to six positions; five-position versions support private Forgejo main releases and six-position versions represent development source. If that version is `X`, the release tag must be exactly `vX`, or `beta-vX` for a four-position GitHub beta release. GitHub main uses three positions; private Forgejo main uses five. Six-position development versions require `dev-vX` tags.
+A Canvas public release is the tracked, editable source template. `package.json.version` is its sole version authority. New versions use `X.Y.Z[-token.N]`. Stable tags are `vX`, Beta tags are
+`beta-vX`, development tags are `dev-vX`, and private main tags are `vX`
+with an `alpha.N` suffix. The version is independent of YouEye core.
+Historical numeric-depth candidates remain readable under their frozen contract.
 
 Prepare a release from a clean candidate tree and run:
 
@@ -31,6 +34,11 @@ pnpm build
 ```
 
 The validator must pass without network access. Do not create another version file, copy the version into the application manifest, or use a runtime-output digest as the source-template identity.
+
+Run the contract tests against the destination-version candidate as well as the
+development tree. Canonical and historical version formats may report different
+validation errors; tests must enforce exact tag rejection without requiring a
+legacy diagnostic for a canonical release.
 
 The releaser must review the exact candidate diff and affirm all of the following before tagging or publishing:
 
@@ -43,18 +51,21 @@ The releaser must review the exact candidate diff and affirm all of the followin
 
 Automated validation supports this review but does not establish ownership or legal rights. Do not publish when an approval or right is unknown.
 
-## Development version baseline
+## Release version identity
 
-Before the next release, align each component's development version with its
-latest published Stable base and choose an unused six-position development
-iteration (for example, `0.5.1.0.0.1` after Stable `0.5.1`). Never lower a
-component already on a newer base. A public snapshot can advance its release
-version without advancing the development branch automatically; compare source
-content separately from version numbers. Keep all registered version authorities
-consistent. Existing release locks describe real published inputs: do not replace
-their versions, tags or hashes with values for artifacts that do not exist.
+New releases use `X.Y.Z[-token.N]`, retaining all three numeric positions.
+Development targets the next Stable base: after `0.5.3`, use
+`0.5.4-dev.N`; private main uses `alpha.N`, public Beta uses `beta.N`, and
+feature releases use a collision-checked branch token with a numeric counter.
+The exact case-sensitive Git branch remains separate from the display token.
+Select source/channel before comparing versions; `.10` follows `.9`.
 
-Source preparation does not require a Development release. The release workflow
-merges reviewed development source, assigns the destination version, then builds
-and publishes only when explicitly started. Private Alpha uses five positions;
-public Stable uses three. A source-only task must not create tags or releases.
+The release coordinator reserves identities with a stable request key before
+building. Retry the same frozen attempt; never repurpose a used identity or
+rewrite historical tags, locks or artifact versions. Failed attempts may leave
+gaps. Source-only preparation does not start builds or publication, and the
+existing branch/merge workflow remains in effect.
+
+This product retains its own version sequence; it is not numbered from the
+YouEye core release group. Keep every registered source version authority
+consistent. Unchanged published payloads retain their original provenance.

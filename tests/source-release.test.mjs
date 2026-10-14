@@ -11,7 +11,8 @@ import { validateSourceTemplate } from "../scripts/validate-source.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const version = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;
-const tagPrefix = version.split(".").length === 6 ? "dev-v" : "v";
+const channel = /-(dev|beta)\.[1-9]\d*$/.exec(version)?.[1];
+const tagPrefix = channel ? `${channel}-v` : version.split(".").length === 6 ? "dev-v" : "v";
 const expectedTag = `${tagPrefix}${version}`;
 const parts = version.split(".");
 parts[parts.length - 1] = String(Number(parts.at(-1)) + 1);
@@ -43,13 +44,15 @@ function rejects(rootPath, options, pattern) {
 test("accepts the repository as a deterministic source template", () => {
   const result = validateSourceTemplate({ root, expectedTag });
   assert.equal(result.derivedTag, expectedTag);
-  assert.match(result.version, /^\d+\.\d+\.\d+(?:\.\d+){0,3}$/);
+  assert.match(result.version, /^\d+\.\d+\.\d+(?:(?:\.\d+){1,3}|-[a-z][a-z0-9-]*\.[1-9]\d*)?$/);
 });
 
 test("derives one exact release tag from package.json.version", (t) => {
   const target = fixture(t);
-  rejects(target, { expectedTag: version }, /malformed/);
-  rejects(target, { expectedTag: wrongTag }, /does not match/);
+  // Canonical and retained numeric-depth versions use different diagnostics,
+  // but both must reject an unprefixed version and a different release tag.
+  rejects(target, { expectedTag: version }, /release tag/);
+  rejects(target, { expectedTag: wrongTag }, /release tag/);
 });
 
 test("rejects a malformed package version", (t) => {
@@ -184,7 +187,7 @@ test("beta source release requires exact four-position tag and version", (t) => 
   rejects(target, { expectedTag: "beta-v0.4.0.2" }, /does not match/);
   pkg.version = "0.4.1";
   writeFileSync(path, JSON.stringify(pkg));
-  rejects(target, { expectedTag: "beta-v0.4.1" }, /four-component/);
+  rejects(target, { expectedTag: "beta-v0.4.1" }, /release tag/);
 });
 
 
@@ -203,4 +206,22 @@ test("development source versions preserve channel depth and exact tag binding",
   writeFileSync(path, JSON.stringify(pkg));
   rejects(target, { expectedTag: "dev-v0.5.13.0.1" }, /six-component/);
   assert.equal(validateSourceTemplate({ root: target, expectedTag: "v0.5.13.0.1" }).version, pkg.version);
+});
+
+test("canonical source versions retain exact destination and independent identity", (t) => {
+  const target = fixture(t);
+  const path = join(target, "package.json");
+  const pkg = JSON.parse(readFileSync(path, "utf8"));
+  for (const [version, tag] of [["1.0.0", "v1.0.0"], ["1.0.1-dev.10", "dev-v1.0.1-dev.10"], ["1.0.1-alpha.2", "v1.0.1-alpha.2"], ["1.0.1-beta.2", "beta-v1.0.1-beta.2"], ["1.0.1-worker-a42.1", "agent/Alex/a42-v1.0.1-worker-a42.1"]]) {
+    pkg.version = version; writeFileSync(path, JSON.stringify(pkg));
+    const result = validateSourceTemplate({ root: target, expectedTag: tag });
+    assert.equal(result.version, version);
+    assert.equal(result.derivedTag, tag);
+    rejects(target, { expectedTag: version }, /release tag|feature tag/);
+    rejects(target, { expectedTag: tag + "0" }, /release tag|feature tag/);
+    if (!version.includes("worker-")) {
+      const wrongChannel = tag.startsWith("dev-") ? `v${version}` : `dev-v${version}`;
+      rejects(target, { expectedTag: wrongChannel }, /release tag/);
+    }
+  }
 });
